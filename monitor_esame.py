@@ -129,14 +129,33 @@ async def dismiss_cookie_banner(page: Page) -> None:
             continue
 
 
+async def _click_first_visible(locator, timeout: int = 8000) -> bool:
+    """Clicca il primo elemento REALMENTE VISIBILE fra quelli trovati.
+    Serve quando la pagina ha copie duplicate dello stesso link (nav mobile
+    vs desktop) e la prima nel DOM non e' quella mostrata a schermo."""
+    count = await locator.count()
+    for i in range(count):
+        candidate = locator.nth(i)
+        try:
+            if await candidate.is_visible():
+                await candidate.click(timeout=timeout)
+                return True
+        except Exception:
+            continue
+    return False
+
+
 async def open_booking_portal(context: BrowserContext, page: Page) -> Page:
     """Dalla pagina informativa clicca 'Appuntamento'. Ritorna la pagina su cui
     proseguire, che puo' essere la stessa o una nuova scheda."""
     await page.goto(INFO_PAGE_URL, wait_until="domcontentloaded")
     await dismiss_cookie_banner(page)
     pages_before = len(context.pages)
-    await page.get_by_role("link", name="Appuntamento").first.click()
+    clicked = await _click_first_visible(page.get_by_role("link", name="Appuntamento"))
+    if not clicked:
+        raise RuntimeError("Nessun link 'Appuntamento' visibile trovato (solo copie nascoste?).")
     await page.wait_for_timeout(2500)
+
     booking_page = context.pages[-1] if len(context.pages) > pages_before else page
     await booking_page.wait_for_load_state("domcontentloaded")
     return booking_page
