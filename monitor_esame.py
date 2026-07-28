@@ -151,10 +151,15 @@ async def open_booking_portal(context: BrowserContext, page: Page) -> Page:
     await page.goto(INFO_PAGE_URL, wait_until="domcontentloaded")
     await dismiss_cookie_banner(page)
     pages_before = len(context.pages)
-    clicked = await _click_first_visible(page.get_by_role("link", name="Appuntamento"))
+        clicked = await _click_first_visible(page.get_by_role("link", name="Appuntamento"))
     if not clicked:
-        raise RuntimeError("Nessun link 'Appuntamento' visibile trovato (solo copie nascoste?).")
+        clicked = await _click_first_visible(page.get_by_role("button", name="Appuntamento"))
+    if not clicked:
+        raise RuntimeError(
+            "Nessun link o bottone 'Appuntamento' visibile trovato (solo copie nascoste?)."
+        )
     await page.wait_for_timeout(2500)
+
 
     booking_page = context.pages[-1] if len(context.pages) > pages_before else page
     await booking_page.wait_for_load_state("domcontentloaded")
@@ -371,7 +376,7 @@ async def save_debug(page: Page) -> None:
         except Exception:
             pass
 
-        links = page.locator("a")
+                links = page.locator("a")
         n = await links.count()
         log(f"Trovati {n} link <a> nella pagina. Primi 20 con testo non vuoto:")
         shown = 0
@@ -386,7 +391,24 @@ async def save_debug(page: Page) -> None:
                 log(f"  [{i}] '{txt}'")
                 shown += 1
 
+        buttons = page.locator("button")
+        bn = await buttons.count()
+        log(f"Trovati {bn} <button> nella pagina. Primi 20 con testo non vuoto:")
+        shown = 0
+        for i in range(bn):
+            if shown >= 20:
+                break
+            try:
+                txt = (await buttons.nth(i).inner_text()).strip().replace("\n", " ")
+                visible = await buttons.nth(i).is_visible()
+            except Exception:
+                continue
+            if txt:
+                log(f"  [{i}] '{txt}' (visibile: {visible})")
+                shown += 1
+
         html = await page.content()
+
         needle = "appuntamento"
         idx = html.lower().find(needle)
         if idx == -1:
